@@ -75,14 +75,14 @@
   docker:
     name:           compile-flannel-binary
     image:          google/golang
-    command:        "/bin/bash -c 'cd /opt/flannel && ./build'"
-    detatch:        False
+    command:        "/bin/bash -c 'cd /opt/flannel/repo && ./build'"
+    detach:         False
     state:          "{{ item }}"
     pull:           missing
-    restart_policy: no
+    restart_policy: "no"
     net:            bridge
     volumes:
-        - "/opt/flannel/repo/flannel:/opt/flannel"
+        - "/opt/flannel/repo:/opt/flannel/repo"
   with_items:
     - "started" # Start the container, generate the binary,
     - "absent"  # then clean up.
@@ -93,7 +93,7 @@
 - name: install_flannel_binary
   when: compile_flannel_binary|success
   file:
-    src:   "/opt/flannel/repo/flannel/bin/flanneld"
+    src:   "/opt/flannel/repo/bin/flanneld"
     dest:  "/usr/local/bin/flanneld"
     state: link
     owner: root
