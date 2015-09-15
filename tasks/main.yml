@@ -1,0 +1,137 @@
+---
+
+# Documentation:
+# https://github.com/coreos/flannel
+# https://github.com/eparis/kubernetes-ansible/tree/master/roles/flannel
+# https://kismatic.com/technical/configuring-flanneld-on-ubuntu-for-use-with-kubernetes
+# https://github.com/kubernetes/kubernetes/blob/master/docs/getting-started-guides/ubuntu.md
+
+# UFW
+
+- name: ufw_allow_udp
+  when: flannel_Backend_Type|lower == "udp"
+  ufw:
+    rule:      allow
+    port:      "{{ item.port }}"
+    proto:     "{{ item.proto }}"
+    direction: "{{ item.direction }}"
+  with_items:
+    # Inbound
+    - { port: "8285", proto: 'udp', direction: 'in'}  # flannel UDP backend
+    # Outbound
+    - { port: "8285", proto: 'udp', direction: 'out'} # flannel UDP backend
+  register: ufw_allow_udp
+
+- name: ufw_allow_vxlan
+  when: flannel_Backend_Type|lower == "vxlan"
+  ufw:
+    rule:      allow
+    port:      "{{ item.port }}"
+    proto:     "{{ item.proto }}"
+    direction: "{{ item.direction }}"
+  with_items:
+    # Inbound
+    - { port: "8472", proto: 'udp', direction: 'in'}  # flannel VXLAN backend
+    # Outbound
+    - { port: "8472", proto: 'udp', direction: 'out'} # flannel VXLAN backend
+  register: ufw_allow_vxlan
+
+# Packages
+
+- name: install_packages
+  apt:
+    name: "{{ item }}"
+  with_items:
+    - "bridge-utils"
+  register: install_packages
+
+# Directories
+
+- name: create_directories
+  file:
+    path:  "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode:  "u=rwx,g=rx,o=rx"
+  with_items:
+    - "/opt/flannel"
+    - "/opt/flannel/repo"
+  register: create_directories
+
+# flannel source
+
+- name: clone_flannel_source
+  when: create_directories|success
+  git:
+    repo: "https://github.com/coreos/flannel.git"
+    dest: "/opt/flannel/repo"
+  register: clone_flannel_source
+
+# flannel binary
+
+- name: compile_flannel_binary
+  when: clone_flannel_source|success
+  docker:
+    name:           compile-flannel-binary
+    image:          google/golang
+    command:        "/bin/bash -c 'cd /opt/flannel && ./build'"
+    detatch:        False
+    state:          "{{ item }}"
+    pull:           missing
+    restart_policy: no
+    net:            bridge
+    volumes:
+        - "/opt/flannel/repo/flannel:/opt/flannel"
+  with_items:
+    - "started" # Start the container, generate the binary,
+    - "absent"  # then clean up.
+  register: compile_flannel_binary
+
+# Add flannel to PATH
+
+- name: install_flannel_binary
+  when: compile_flannel_binary|success
+  file:
+    src:   "/opt/flannel/repo/flannel/bin/flanneld"
+    dest:  "/usr/local/bin/flanneld"
+    state: link
+    owner: root
+    group: root
+    mode:  "u=rwx,g=rx,o=rx"
+  register: install_flannel_binary
+
+# flannel configuration
+
+- name: amend_flannel_config
+  template:
+    src:  flanneld.j2
+    dest: "/etc/default/flanneld"
+  notify:
+    - restart_flannel
+  register: amend_flannel_config
+
+# System startup
+
+# TODO
+#- name: amend_flannel_init
+#  template:
+#    src:  flanneld.j2
+#    dest: "/etc/default/flanneld"
+#  notify:
+#    - restart_flannel
+#  register: amend_flannel_init
+
+# Services
+
+- name: start_flannel
+  when: install_packages|success and install_flannel_binary|success and amend_flannel_config|success
+  service:
+    name:    flanneld
+    state:   started
+    enabled: yes
+  notify:
+    - stop_docker
+    - disable_docker0
+    - delete_docker0
+    - start_docker

@@ -1,0 +1,15 @@
+{
+    "Network":   "{{ flannel_Network }}",
+    "SubnetLen": {{ flannel_SubnetLen }},
+    "SubnetMin": "{{ flannel_SubnetMin }}",
+    "SubnetMax": "{{ flannel_SubnetMax }}",
+    "Backend": {
+        "Type": "{{ flannel_Backend_Type|lower }}",
+        {% if hostvars[host]['flannel_Backend_Type'].lower == 'udp' %}
+        "Port": {{ flannel_Backend_Port }}
+        {% endif %}
+        {% if hostvars[host]['flannel_Backend_Type'].lower == 'vxlan' %}
+        "VNI": {{ flannel_Backend_VNI }}
+        {% endif %}
+    }
+}

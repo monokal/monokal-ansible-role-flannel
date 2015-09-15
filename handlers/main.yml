@@ -1,0 +1,33 @@
+---
+
+# flannel
+
+- name: restart_flannel
+  service:
+    name:  flanneld
+    state: restarted
+  notify:
+    - stop_docker
+    - disable_docker0
+    - delete_docker0
+    - start_docker
+
+# Docker
+
+- name: start_docker
+  service:
+    name:  docker
+    state: started
+
+- name: stop_docker
+  service:
+    name:  docker
+    state: stopped
+
+- name: disable_docker0
+  command: "ip link set dev docker0 down"
+  ignore_errors: yes
+
+- name: delete_docker0
+  command: "brctl delbr docker0"
+  ignore_errors: yes
