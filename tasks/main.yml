@@ -2,6 +2,7 @@
 
 # Documentation:
 # https://github.com/coreos/flannel
+# https://coreos.com/flannel/docs/latest/flannel-config.html
 # https://github.com/eparis/kubernetes-ansible/tree/master/roles/flannel
 # https://kismatic.com/technical/configuring-flanneld-on-ubuntu-for-use-with-kubernetes
 # https://github.com/kubernetes/kubernetes/blob/master/docs/getting-started-guides/ubuntu.md
@@ -94,7 +95,7 @@
   when: compile_flannel_binary|success
   file:
     src:   "/opt/flannel/repo/bin/flanneld"
-    dest:  "/usr/local/bin/flanneld"
+    dest:  "/usr/bin/flanneld"
     state: link
     owner: root
     group: root
@@ -113,19 +114,18 @@
 
 # System startup
 
-# TODO
-#- name: amend_flannel_init
-#  template:
-#    src:  flanneld.j2
-#    dest: "/etc/default/flanneld"
-#  notify:
-#    - restart_flannel
-#  register: amend_flannel_init
+- name: amend_flannel_upstart
+  template:
+    src:  service/flanneld.conf.j2
+    dest: "/etc/init/flanneld.conf"
+  notify:
+    - restart_flannel
+  register: amend_flannel_upstart
 
 # Services
 
 - name: start_flannel
-  when: install_packages|success and install_flannel_binary|success and amend_flannel_config|success
+  when: install_packages|success and install_flannel_binary|success and amend_flannel_config|success and amend_flannel_upstart|success
   service:
     name:    flanneld
     state:   started
